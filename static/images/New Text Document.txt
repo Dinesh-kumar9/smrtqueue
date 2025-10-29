@@ -1,0 +1,17 @@
+<<svg width="450" height="300" viewBox="0 0 450 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M415.5 250H34.5C28.149 250 23 244.851 23 238.5V61.5C23 55.149 28.149 50 34.5 50H415.5C421.851 50 427 55.149 427 61.5V238.5C427 244.851 421.851 250 415.5 250Z" fill="white" stroke="#2c3e50" stroke-width="6"/>
+    <path d="M112 50V250" stroke="#2c3e50" stroke-width="6"/>
+    <rect x="42" y="69" width="53" height="12" rx="3" fill="#2c3e50"/>
+    <rect x="42" y="101" width="53" height="8" rx="3" fill="#e0e0e0"/>
+    <rect x="42" y="125" width="53" height="8" rx="3" fill="#e0e0e0"/>
+    <rect x="42" y="149" width="53" height="8" rx="3" fill="#e0e0e0"/>
+    <rect x="42" y="173" width="53" height="8" rx="3" fill="#e0e0e0"/>
+    <rect x="42" y="215" width="53" height="12" rx="3" fill="#e0e0e0"/>
+    <rect x="339" y="69" width="53" height="12" rx="3" fill="#e0e0e0"/>
+    <rect x="144" y="94" width="94" height="46" rx="6" fill="#4f46e5"/>
+    <rect x="257" y="94" width="94" height="46" rx="6" fill="#4f46e5"/>
+    <rect x="370" y="94" width="34" height="46" rx="6" fill="#4f46e5"/>
+    <rect x="144" y="153" width="260" height="28" rx="6" fill="#e0e0e0"/>
+    <tspan x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Inter, sans-serif" font-size="20" fill="#2c3e50"> </tspan>
+    <rect x="144" y="194" width="260" height="28" rx="6" fill="#e0e0e0"/>
+</svg>
