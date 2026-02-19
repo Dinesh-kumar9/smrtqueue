@@ -10,8 +10,12 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 
 # ── Global State ────────────────────────────────────────────────────────────
+import tempfile
+
+# ── Global State ────────────────────────────────────────────────────────────
 wait_time_model = None
-MODEL_PATH = "wait_time_model.pkl"
+# Vercel only allows writing to /tmp
+MODEL_PATH = os.path.join(tempfile.gettempdir(), "wait_time_model.pkl")
 
 # Rolling window of recent actual wait times (in seconds) for smart fallback
 _recent_waits = deque(maxlen=20)
