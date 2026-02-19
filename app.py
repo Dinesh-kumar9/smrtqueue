@@ -1,5 +1,5 @@
 # app.py — SmartQueue with Supabase Persistence
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import logging
 import threading
@@ -190,10 +190,88 @@ def _send_email_bg(to, subject, body_html):
     threading.Thread(target=send_email_html, args=(to, subject, body_html), daemon=True).start()
 
 
-# ── HTTP Route ───────────────────────────────────────────────────────────────
+# ── HTTP Routes (Vercel Fallback) ──────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/join", methods=["POST"])
+def api_join_queue():
+    """HTTP fallback for joining queue (Vercel compatible)."""
+    if QUEUE_PAUSED:
+        return {"params": {"error": "Queue is currently paused by admin."}}, 403
+
+    data = request.json
+    user_id  = data.get("user_id", "").strip()
+    email    = data.get("email", "").strip()
+    priority = data.get("priority", "normal")
+
+    if not user_id:
+        return {"error": "User ID is required."}, 400
+
+    if db_is_duplicate(user_id):
+        return {"error": f"'{user_id}' is already in the queue."}, 409
+
+    if db_add_user(user_id, email, priority, user_id):
+        queue = db_get_waiting_queue()
+        position = next((i + 1 for i, u in enumerate(queue) if u["user_id"] == user_id), len(queue))
+        estimated_wait = predict_wait_time(position, len(queue))
+        
+        # Trigger socket update for others (best effort)
+        socketio.emit("queue_data", {"queue": get_queue_details_for_frontend()})
+        socketio.emit("stats_update", get_stats())
+        
+        # Send email background
+        if email:
+             # Re-use logic: serve_by calculation
+            serve_by = (datetime.now(IST) + timedelta(minutes=estimated_wait)).strftime('%I:%M %p')
+            priority_label = priority.capitalize()
+            _send_email_bg(email, "✅ Queue Confirmation — SmartQueue", f"""
+            <div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;background:#0f0c29;color:#f1f5f9;border-radius:16px;overflow:hidden;">
+              <div style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:28px 32px;">
+                <h2 style="margin:0;font-size:1.5rem;">You're in the Queue! 🎉</h2>
+              </div>
+              <div style="padding:28px 32px;">
+                <p>Hi <strong>{user_id}</strong>,</p>
+                <p>You've successfully joined the SmartQueue via Web.</p>
+                <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                  <tr><td style="padding:10px;color:#a78bfa;font-weight:600;">Position</td><td style="padding:10px;">#{position}</td></tr>
+                  <tr style="background:rgba(255,255,255,0.05);"><td style="padding:10px;color:#a78bfa;font-weight:600;">Priority</td><td style="padding:10px;">{priority_label}</td></tr>
+                  <tr><td style="padding:10px;color:#a78bfa;font-weight:600;">Est. Wait</td><td style="padding:10px;">{estimated_wait:.1f} minutes</td></tr>
+                  <tr style="background:rgba(255,255,255,0.05);"><td style="padding:10px;color:#a78bfa;font-weight:600;">Serve By</td><td style="padding:10px;">{serve_by} IST</td></tr>
+                </table>
+              </div>
+            </div>
+            """)
+
+        return {
+            "success": True, 
+            "position": position, 
+            "estimated_wait": estimated_wait,
+            "priority": priority
+        }
+    return {"error": "Database error."}, 500
+
+
+@app.route("/api/login", methods=["POST"])
+def api_admin_login():
+    """HTTP fallback for admin login."""
+    data = request.json
+    if data.get("user_id") == ADMIN_ID and data.get("password") == ADMIN_PASSWORD:
+        return {"success": True}
+    return {"error": "Invalid credentials."}, 401
+
+
+@app.route("/api/status")
+def api_status():
+    """Polling endpoint for queue status."""
+    return {
+        "queue": get_queue_details_for_frontend(),
+        "stats": get_stats(),
+        "now_serving": {"user_id": NOW_SERVING},
+        "paused": QUEUE_PAUSED
+    }
 
 
 # ── Socket.IO Events ─────────────────────────────────────────────────────────

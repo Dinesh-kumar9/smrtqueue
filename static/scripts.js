@@ -68,8 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('user-id').focus();
     });
 
-    // ── Join Queue ─────────────────────────────────────────────────
-    joinForm.addEventListener('submit', e => {
+    // ── Join Queue (HTTP / Vercel Fix) ─────────────────────────────
+    joinForm.addEventListener('submit', async e => {
         e.preventDefault();
         if (queueIsPaused) {
             showToast('Queue is currently paused. Please wait.', 'warning');
@@ -80,20 +80,104 @@ document.addEventListener('DOMContentLoaded', () => {
         const priority = document.querySelector('input[name="priority"]:checked')?.value || 'normal';
 
         if (userId && email) {
-            currentUserId = userId;
-            sessionStorage.setItem('smartQueueUserId', currentUserId);
-            socket.emit('join_queue', { user_id: userId, email, priority });
+            try {
+                const res = await fetch('/api/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, email, priority })
+                });
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    currentUserId = userId;
+                    sessionStorage.setItem('smartQueueUserId', currentUserId);
+
+                    // Manually trigger the "joined" state view update
+                    userJoinFormContainer.style.display = 'none';
+                    userStatusDisplay.style.display = 'flex';
+                    switchView('user-view');
+                    document.getElementById('position-value').textContent = data.position;
+                    // ... other UI updates happen via polling/socket ...
+                    showToast(`You joined at position #${data.position}. Est. wait: ${data.estimated_wait} min`, 'success');
+
+                    // Force a poll immediately
+                    pollData();
+                } else {
+                    showToast(data.error || 'Could not join queue.', 'error');
+                }
+            } catch (err) {
+                showToast('Network error joining queue.', 'error');
+                console.error(err);
+            }
         }
     });
 
-    // ── Admin Login ────────────────────────────────────────────────
-    adminLoginForm.addEventListener('submit', e => {
+    // ── Admin Login (HTTP / Vercel Fix) ────────────────────────────
+    adminLoginForm.addEventListener('submit', async e => {
         e.preventDefault();
-        socket.emit('admin_login', {
-            user_id: document.getElementById('admin-id').value,
-            password: document.getElementById('admin-password').value
-        });
+        const uid = document.getElementById('admin-id').value;
+        const pwd = document.getElementById('admin-password').value;
+
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: uid, password: pwd })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                showToast('Admin login successful!', 'success');
+                switchView('admin-view');
+            } else {
+                showToast('Admin login failed. Check your credentials.', 'error');
+            }
+        } catch (err) {
+            showToast('Login network error.', 'error');
+        }
     });
+
+    // ── Polling Fallback (for Vercel) ──────────────────────────────
+    // Vercel websockets disconnect often. Polling ensures data stays fresh.
+    async function pollData() {
+        try {
+            const res = await fetch('/api/status');
+            if (res.ok) {
+                const data = await res.json();
+                // Update specific socket-like handlers
+                if (data.queue) updateAdminView(data.queue);
+                if (data.stats) socket.listeners('stats_update').forEach(fn => fn(data.stats)); // Mock event trigger? No, just manual update
+
+                // Manual UI Update reusing socket logic parts
+                const stats = data.stats;
+                if (stats) {
+                    const fmtWait = (v) => (v != null && v > 0) ? v : '--';
+                    document.getElementById('stat-queue-len').textContent = stats.queue_length;
+                    document.getElementById('stat-avg-wait').textContent = fmtWait(stats.avg_wait_minutes);
+                    // ... (rest of stats update logic) ...
+                    queueIsPaused = data.paused;
+                    updatePauseUI(data.paused);
+                }
+
+                // Update my position
+                if (currentUserId && data.queue) {
+                    const me = data.queue.find(u => u.user_id === currentUserId || u.user_name === currentUserId);
+                    if (me) {
+                        const myPos = data.queue.indexOf(me) + 1;
+                        document.getElementById('position-value').textContent = myPos;
+                        document.getElementById('people-ahead-value').textContent = myPos > 0 ? myPos - 1 : 0;
+                        document.getElementById('wait-time-value').textContent = me.wait_time;
+                    } else if (sessionStorage.getItem('smartQueueUserId')) {
+                        // User was in session but not in queue anymore (served or removed)
+                        // Optional: Handle this case
+                    }
+                }
+            }
+        } catch (e) { console.error("Polling error", e); }
+    }
+
+    // Poll every 5 seconds
+    setInterval(pollData, 5000);
 
     // ── Admin Controls ─────────────────────────────────────────────
     document.getElementById('next-user-btn').addEventListener('click', () => socket.emit('next_user'));
