@@ -1,144 +1,302 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartQueue</title>
+    <title>SmartQueue — Skip the Wait</title>
+    <meta name="description" content="AI-powered queue management. Join from your phone, get real-time updates.">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
+
 <body>
 
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Fixed Navbar -->
     <header class="main-header">
         <div class="header-content">
             <div class="navbar-brand">SmartQueue</div>
-            <nav class="main-nav">
-                <a href="#home" class="nav-link active" data-view="home-view">Home</a>
-                <a href="#join" class="nav-link" data-view="user-view">Join Queue</a>
-                <a href="#admin" class="nav-link" data-view="admin-login-view">Admin</a>
-            </nav>
+            <div class="header-right">
+                <!-- Live stats pill -->
+                <div class="live-stats-pill" id="live-stats-pill">
+                    <span class="live-dot"></span>
+                    <span id="stat-queue-len">0</span> in queue &nbsp;·&nbsp;
+                    Avg <span id="stat-avg-wait">--</span> min
+                </div>
+                <nav class="main-nav">
+                    <a href="#" class="nav-link active" data-view="home-view">Home</a>
+                    <a href="#" class="nav-link" data-view="user-view">Join Queue</a>
+                    <a href="#" class="nav-link" data-view="admin-login-view">Admin</a>
+                </nav>
+            </div>
         </div>
     </header>
-    
-    <main class="content-area">
 
-        <section id="home-view" class="view-card active hero-section">
+    <!-- App Shell -->
+    <div class="app-shell">
+
+        <!-- ===== HOME / HERO ===== -->
+        <section id="home-view" class="view-card active" aria-label="Home">
             <div class="hero-text">
-                <h1>Skip the Wait.</h1>
-                <p>Join the queue right from your phone and get notified when it's your turn. Simple, smart, and efficient.</p>
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    AI-Powered Queue Management
+                </div>
+                <h1>
+                    Skip the Wait.<br>
+                    <span class="gradient-text">Stay Smart.</span>
+                </h1>
+                <p>Join the queue from your phone. Get ML-powered wait predictions and email alerts at every step.</p>
+
+                <!-- Queue paused banner -->
+                <div id="paused-banner" class="paused-banner" style="display:none;">
+                    ⏸️ Queue is currently paused by admin. Please wait.
+                </div>
+
                 <div class="hero-buttons">
-                    <button id="show-user-view-btn" class="btn btn-primary">Join the Queue Now</button>
-                    <button id="show-admin-login-btn" class="btn btn-secondary">Manage a Queue</button>
+                    <button id="show-user-view-btn" class="btn btn-primary btn-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        Join the Queue
+                    </button>
+                    <button id="show-admin-login-btn" class="btn btn-secondary btn-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        Manage Queue
+                    </button>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-number" id="hero-queue-len">0</div>
+                        <div class="stat-label">In Queue</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="hero-served">0</div>
+                        <div class="stat-label">Served Today</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="hero-avg-wait">--</div>
+                        <div class="stat-label">Avg Wait (min)</div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section id="user-view" class="view-card">
-            <div id="user-join-form-container">
-                <h2>Join the Queue</h2>
-                <p>Enter your details to save a spot. You'll see your position in real-time.</p>
-                <form id="join-form" class="join-form">
+        <!-- ===== JOIN QUEUE ===== -->
+        <section id="user-view" class="view-card" aria-label="Join Queue">
+
+            <!-- Join Form -->
+            <div id="user-join-form-container" class="glass-card form-wrapper">
+                <div class="form-header">
+                    <h2>Join the Queue</h2>
+                    <p>Enter your details to save a spot. You'll see your position in real-time.</p>
+                </div>
+                <form id="join-form">
                     <div class="form-group">
-                        <label for="user-id">Enter Your Name or ID</label>
+                        <label for="user-id">Your Name or ID</label>
                         <input type="text" id="user-id" required placeholder="e.g., Akash Sharma or 78945">
                     </div>
                     <div class="form-group">
-                        <label for="gmail">Enter Your Email (for notifications)</label>
+                        <label for="gmail">Email (for notifications)</label>
                         <input type="email" id="gmail" required placeholder="akash.sharma@example.com">
                     </div>
-                    <button type="submit" class="btn btn-primary btn-full-width">Get My Spot</button>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <div class="priority-selector">
+                            <label class="priority-option">
+                                <input type="radio" name="priority" value="normal" checked>
+                                <span class="priority-chip normal">🟢 Normal</span>
+                            </label>
+                            <label class="priority-option">
+                                <input type="radio" name="priority" value="senior">
+                                <span class="priority-chip senior">🟡 Senior</span>
+                            </label>
+                            <label class="priority-option">
+                                <input type="radio" name="priority" value="emergency">
+                                <span class="priority-chip emergency">🔴 Emergency</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full-width">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14" />
+                            <path d="m12 5 7 7-7 7" />
+                        </svg>
+                        Get My Spot
+                    </button>
                 </form>
             </div>
 
-            <div id="user-status-display" style="display: none;">
-                <article class="status-card">
-                    <header class="status-card__header">
-                        <p>You are in the queue!</p>
-                        <h3>Now Serving: #<span id="serving-now-value">--</span></h3>
-                    </header>
+            <!-- Status Card -->
+            <div id="user-status-display" style="display:none; width:100%; flex-direction:column; align-items:center;">
+
+                <!-- "You're Next" banner -->
+                <div id="youre-next-banner" class="youre-next-banner" style="display:none;">
+                    🎯 You're Next! Head to the counter now.
+                </div>
+
+                <article class="status-card glass-card">
+                    <div class="status-card__header">
+                        <p>You are in the queue</p>
+                        <h3>Now Serving: <span id="serving-now-value">--</span></h3>
+                    </div>
                     <div class="status-card__body">
-                        <div class="status-card__position-label">Your Number</div>
+                        <div class="status-card__position-label">Your Position</div>
                         <div class="status-card__position-number" id="position-value">--</div>
                         <div class="status-card__progress">
                             <span id="people-ahead-value">--</span> people ahead of you
                         </div>
                     </div>
-                    <footer class="status-card__footer">
-                        <p>Estimated Wait: <strong id="wait-time-value">--</strong> minutes</p>
-                    </footer>
+                    <div class="status-card__footer">
+                        <p>Estimated Wait: <strong id="wait-time-value">--</strong> min</p>
+                        <p class="priority-display">Priority: <span id="priority-display-value">Normal</span></p>
+                    </div>
                 </article>
                 <div class="status-actions">
-                    <button id="add-another-user-btn" class="btn btn-secondary">Add Another User</button>
-                    <button id="leave-queue-btn" class="btn btn-link">Leave Queue & Start Over</button>
+                    <button id="add-another-user-btn" class="btn btn-secondary btn-full-width">Add Another
+                        Person</button>
+                    <button id="leave-queue-btn" class="btn btn-link">Leave Queue &amp; Start Over</button>
                 </div>
             </div>
+
         </section>
-        
-        <section id="admin-login-view" class="view-card">
-            <div class="login-form-container">
-                <h2>Administrator Access</h2>
+
+        <!-- ===== ADMIN LOGIN ===== -->
+        <section id="admin-login-view" class="view-card" aria-label="Admin Login">
+            <div class="glass-card form-wrapper">
+                <div class="form-header">
+                    <h2>Administrator Access</h2>
+                    <p>Sign in to manage the queue dashboard.</p>
+                </div>
                 <form id="admin-login-form">
                     <div class="form-group">
-                        <label for="admin-id">Admin ID:</label>
-                        <input type="text" id="admin-id" required>
+                        <label for="admin-id">Admin ID</label>
+                        <input type="text" id="admin-id" required placeholder="admin">
                     </div>
                     <div class="form-group">
-                        <label for="admin-password">Password:</label>
-                        <input type="password" id="admin-password" required autocomplete="current-password">
+                        <label for="admin-password">Password</label>
+                        <input type="password" id="admin-password" required autocomplete="current-password"
+                            placeholder="••••••••">
                     </div>
-                    <button type="submit" class="btn btn-primary btn-full-width">Login</button>
+                    <button type="submit" class="btn btn-primary btn-full-width">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                            <polyline points="10 17 15 12 10 7" />
+                            <line x1="15" y1="12" x2="3" y2="12" />
+                        </svg>
+                        Sign In
+                    </button>
                 </form>
             </div>
         </section>
 
-        <section id="admin-view" class="view-card admin-panel">
-            <header class="admin-panel__header">
-                <h2>Queue Dashboard</h2>
-                <div class="now-serving-box">
-                    <span>Now Serving</span>
-                    <strong id="now-serving-banner">None</strong>
+        <!-- ===== ADMIN DASHBOARD ===== -->
+        <section id="admin-view" class="view-card" aria-label="Admin Dashboard">
+            <div class="admin-panel">
+
+                <!-- Header -->
+                <header class="admin-panel__header">
+                    <h2>Queue Dashboard</h2>
+                    <div class="now-serving-box glass-card">
+                        <div>
+                            <div class="label">Now Serving</div>
+                            <strong id="now-serving-banner">None</strong>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Stats Cards -->
+                <div class="admin-stats-row">
+                    <div class="admin-stat-card glass-card">
+                        <div class="admin-stat-icon">👥</div>
+                        <div class="admin-stat-value" id="admin-stat-queue">0</div>
+                        <div class="admin-stat-label">In Queue</div>
+                    </div>
+                    <div class="admin-stat-card glass-card">
+                        <div class="admin-stat-icon">✅</div>
+                        <div class="admin-stat-value" id="admin-stat-served">0</div>
+                        <div class="admin-stat-label">Served Today</div>
+                    </div>
+                    <div class="admin-stat-card glass-card">
+                        <div class="admin-stat-icon">⏱️</div>
+                        <div class="admin-stat-value" id="admin-stat-avg">--</div>
+                        <div class="admin-stat-label">Avg Wait (min)</div>
+                    </div>
+                    <div class="admin-stat-card glass-card" id="pause-stat-card">
+                        <div class="admin-stat-icon" id="queue-status-icon">▶️</div>
+                        <div class="admin-stat-value" id="queue-status-text">Active</div>
+                        <div class="admin-stat-label">Queue Status</div>
+                    </div>
                 </div>
-            </header>
-            
-            <div class="admin-panel__controls">
-                <button id="next-user-btn" class="btn btn-primary btn-large">
-                    <span class="btn-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                    </span>
-                    Serve Next User
-                </button>
-                <button id="clear-queue-btn" class="btn btn-danger">
-                    <span class="btn-icon">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                    </span>
-                    Clear Entire Queue
-                </button>
-            </div>
-            
-            <div class="admin-panel__table-container">
-                <table class="queue-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>User ID</th>
-                            <th>Email</th>
-                            <th>Joined At</th>
-                            <th>Estimated Wait (min)</th>
-                            <th>Serve By</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="queue-table-body">
-                        </tbody>
-                </table>
-                 <p id="empty-queue-message" class="empty-message" style="display: none;">The queue is currently empty.</p>
+
+                <!-- Controls -->
+                <div class="admin-panel__controls">
+                    <button id="next-user-btn" class="btn btn-primary btn-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m9 18 6-6-6-6" />
+                        </svg>
+                        Serve Next
+                    </button>
+                    <button id="pause-queue-btn" class="btn btn-secondary btn-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="6" y="4" width="4" height="16" />
+                            <rect x="14" y="4" width="4" height="16" />
+                        </svg>
+                        Pause Queue
+                    </button>
+                    <button id="clear-queue-btn" class="btn btn-danger btn-large">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        Clear Queue
+                    </button>
+                </div>
+
+                <!-- Table -->
+                <div class="admin-panel__table-container glass-card">
+                    <table class="queue-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>User</th>
+                                <th>Priority</th>
+                                <th>Email</th>
+                                <th>Joined At</th>
+                                <th>Wait (min)</th>
+                                <th>Serve By</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-table-body"></tbody>
+                    </table>
+                    <p id="empty-queue-message" class="empty-message" style="display:none;">
+                        ✨ The queue is currently empty.
+                    </p>
+                </div>
+
             </div>
         </section>
-    </main>
+
+    </div><!-- /.app-shell -->
 
     <script src="{{ url_for('static', filename='scripts.js') }}"></script>
 </body>
+
 </html>
